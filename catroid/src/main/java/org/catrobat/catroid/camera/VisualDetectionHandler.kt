@@ -28,8 +28,9 @@ import android.graphics.Rect
 import com.google.mlkit.vision.face.Face
 import com.google.mlkit.vision.pose.Pose
 import com.google.mlkit.vision.pose.PoseLandmark
-import com.google.mlkit.vision.text.Text
 import com.huawei.hms.mlsdk.face.MLFace
+import com.huawei.hms.mlsdk.skeleton.MLJoint
+import com.huawei.hms.mlsdk.skeleton.MLSkeleton
 import org.catrobat.catroid.ProjectManager
 import org.catrobat.catroid.common.Constants
 import org.catrobat.catroid.common.ScreenValues
@@ -39,6 +40,8 @@ import org.catrobat.catroid.formulaeditor.SensorHandler
 import org.catrobat.catroid.formulaeditor.Sensors
 import org.catrobat.catroid.formulaeditor.Sensors.LEFT_FOOT_INDEX_X
 import org.catrobat.catroid.formulaeditor.Sensors.LEFT_FOOT_INDEX_Y
+import org.catrobat.catroid.formulaeditor.Sensors.LEFT_SHOULDER_X
+import org.catrobat.catroid.formulaeditor.Sensors.LEFT_SHOULDER_Y
 import org.catrobat.catroid.formulaeditor.Sensors.MOUTH_LEFT_CORNER_X
 import org.catrobat.catroid.formulaeditor.Sensors.MOUTH_LEFT_CORNER_Y
 import org.catrobat.catroid.formulaeditor.Sensors.MOUTH_RIGHT_CORNER_X
@@ -49,8 +52,9 @@ import org.catrobat.catroid.formulaeditor.Sensors.RIGHT_EYE_OUTER_X
 import org.catrobat.catroid.formulaeditor.Sensors.RIGHT_EYE_OUTER_Y
 import org.catrobat.catroid.formulaeditor.Sensors.RIGHT_FOOT_INDEX_X
 import org.catrobat.catroid.formulaeditor.Sensors.RIGHT_FOOT_INDEX_Y
+import org.catrobat.catroid.formulaeditor.Sensors.RIGHT_SHOULDER_X
+import org.catrobat.catroid.formulaeditor.Sensors.RIGHT_SHOULDER_Y
 import org.catrobat.catroid.stage.StageActivity
-import org.catrobat.catroid.utils.TextBlockUtil
 import kotlin.math.roundToInt
 
 data class VisualDetectionHandlerFace(val id: Int, val boundingBox: Rect)
@@ -90,14 +94,10 @@ object VisualDetectionHandler {
         return newFacesList
     }
 
-    fun updateTextSensorValues(text: Text, imageWidth: Int, imageHeight: Int) {
-        if (text.textBlocks.isEmpty()) return
-
-        TextBlockUtil.setTextBlocks(text.textBlocks, imageWidth, imageHeight)
-
+    fun updateTextSensorValues(text: String, numberOfBlocks: Int) {
         sensorListeners.forEach { sensorListener ->
-            sensorListener.writeToSensor(Sensors.TEXT_FROM_CAMERA, text.text)
-            sensorListener.writeToSensor(Sensors.TEXT_BLOCKS_NUMBER, text.textBlocks.size.toDouble())
+            sensorListener.writeToSensor(Sensors.TEXT_FROM_CAMERA, text)
+            sensorListener.writeToSensor(Sensors.TEXT_BLOCKS_NUMBER, numberOfBlocks.toDouble())
         }
     }
 
@@ -234,8 +234,8 @@ object VisualDetectionHandler {
         position: Point
     ) {
         val positionSensor = when (poseLandmarkType) {
-            PoseLandmark.LEFT_SHOULDER -> Pair(Sensors.LEFT_SHOULDER_X, Sensors.LEFT_SHOULDER_Y)
-            PoseLandmark.RIGHT_SHOULDER -> Pair(Sensors.RIGHT_SHOULDER_X, Sensors.RIGHT_SHOULDER_Y)
+            PoseLandmark.LEFT_SHOULDER -> Pair(LEFT_SHOULDER_X, LEFT_SHOULDER_Y)
+            PoseLandmark.RIGHT_SHOULDER -> Pair(RIGHT_SHOULDER_X, RIGHT_SHOULDER_Y)
             PoseLandmark.LEFT_ELBOW -> Pair(Sensors.LEFT_ELBOW_X, Sensors.LEFT_ELBOW_Y)
             PoseLandmark.RIGHT_ELBOW -> Pair(Sensors.RIGHT_ELBOW_X, Sensors.RIGHT_ELBOW_Y)
             PoseLandmark.LEFT_WRIST -> Pair(Sensors.LEFT_WRIST_X, Sensors.LEFT_WRIST_Y)
@@ -282,6 +282,58 @@ object VisualDetectionHandler {
         }
     }
 
+    fun updateAllPoseSensorValuesHuawei(
+        skeletonList: List<MLSkeleton>,
+        imageWidth: Int,
+        imageHeight: Int
+    ) {
+        if (skeletonList.isNullOrEmpty()) return
+
+        skeletonList[0].joints.forEach { joint ->
+            joint?.let {
+                val jointPositionTranslated = translateToStageCoordinates(
+                    joint.pointX.toDouble(),
+                    joint.pointY.toDouble(),
+                    imageWidth,
+                    imageHeight
+                )
+
+                updatePoseSensorValuesHuawei(joint.type, jointPositionTranslated)
+            }
+        }
+    }
+
+    private fun updatePoseSensorValuesHuawei(
+        jointType: Int,
+        position: Point
+    ) {
+        sensorListeners.forEach() { sensorListener ->
+            val positionSensor = when (jointType) {
+                MLJoint.TYPE_HEAD_TOP -> Pair(Sensors.HEAD_TOP_X, Sensors.HEAD_TOP_Y)
+                MLJoint.TYPE_NECK -> Pair(Sensors.NECK_X, Sensors.NECK_Y)
+                MLJoint.TYPE_LEFT_SHOULDER -> Pair(LEFT_SHOULDER_X, LEFT_SHOULDER_Y)
+                MLJoint.TYPE_RIGHT_SHOULDER -> Pair(RIGHT_SHOULDER_X, RIGHT_SHOULDER_Y)
+                MLJoint.TYPE_LEFT_ELBOW -> Pair(Sensors.LEFT_ELBOW_X, Sensors.LEFT_ELBOW_Y)
+                MLJoint.TYPE_RIGHT_ELBOW -> Pair(Sensors.RIGHT_ELBOW_X, Sensors.RIGHT_ELBOW_Y)
+                MLJoint.TYPE_LEFT_WRIST -> Pair(Sensors.LEFT_WRIST_X, Sensors.LEFT_WRIST_Y)
+                MLJoint.TYPE_RIGHT_WRIST -> Pair(Sensors.RIGHT_WRIST_X, Sensors.RIGHT_WRIST_Y)
+                MLJoint.TYPE_LEFT_HIP -> Pair(Sensors.LEFT_HIP_X, Sensors.LEFT_HIP_Y)
+                MLJoint.TYPE_RIGHT_HIP -> Pair(Sensors.RIGHT_HIP_X, Sensors.RIGHT_HIP_Y)
+                MLJoint.TYPE_LEFT_KNEE -> Pair(Sensors.LEFT_KNEE_X, Sensors.LEFT_KNEE_Y)
+                MLJoint.TYPE_RIGHT_KNEE -> Pair(Sensors.RIGHT_KNEE_X, Sensors.RIGHT_KNEE_Y)
+                MLJoint.TYPE_LEFT_ANKLE -> Pair(Sensors.LEFT_ANKLE_X, Sensors.LEFT_ANKLE_Y)
+                MLJoint.TYPE_RIGHT_ANKLE -> Pair(Sensors.RIGHT_ANKLE_X, Sensors.RIGHT_ANKLE_Y)
+                else -> null
+            }
+            positionSensor?.let {
+                sensorListener.writePositionAccordingToRotationToSensor(
+                    it.first, it.second,
+                    position.toPosition()
+                )
+            }
+        }
+    }
+
     private fun Point.toPosition() = Position(x.toDouble(), y.toDouble())
 
     private fun translateToStageCoordinates(
@@ -313,7 +365,7 @@ object VisualDetectionHandler {
         }
     }
 
-    private fun coordinatesFromRelativePosition(
+    fun coordinatesFromRelativePosition(
         relativeX: Double,
         width: Double,
         relativeY: Double,
